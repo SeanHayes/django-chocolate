@@ -8,7 +8,7 @@ from django.db.models.fields.related import ManyRelatedObjectsDescriptor
 from django.db.models.fields.related import ForeignRelatedObjectsDescriptor
 from django.db import models
 
-import generators
+from . import generators
 
 
 FIELDCLASS_TO_GENERATOR = {
@@ -277,7 +277,21 @@ class Mockup(object):
                 value = field.default
         else:
             field_type = type(field)
-            generator_class = FIELDCLASS_TO_GENERATOR[field_type]
+            generator_class = None
+            try:
+                generator_class = FIELDCLASS_TO_GENERATOR[field_type]
+            except KeyError:
+                if field_type == models.fields.AutoField:
+                    raise
+                for base in field_type.__bases__:
+                    try:
+                        generator_class = FIELDCLASS_TO_GENERATOR[base]
+                        # so we don't have to search through the parent classes again
+                        FIELDCLASS_TO_GENERATOR[field_type] = generator_class
+                    except KeyError:
+                        pass
+                if not generator_class:
+                    raise
             if issubclass(generator_class, generators.FieldGenerator):
                 generator = generator_class(field)
             elif issubclass(generator_class, generators.Generator):
@@ -310,6 +324,11 @@ class Mockup(object):
 
         fields = model_class._meta.fields
         for field in fields:
+
+            # omitting nullable related fields helps avoid recursion errors.
+            if field.null and (isinstance(field, ForeignKey) or
+                               isinstance(field, ManyToManyField)):
+                continue
 
             if field.name in model_data.data:
                 continue

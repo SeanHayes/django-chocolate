@@ -1,4 +1,4 @@
-from tastypie.resources import ModelResource
+from tastypie.resources import Resource
 from tastypie import fields
 from models import Mockup, ModelFactory
 
@@ -111,22 +111,31 @@ class TastyMockup(object):
 
 class TastyFactory(object):
 
+    model_factory = ModelFactory()
+
     def __init__(self, api, model_factory=None):
         self.api = api
-        self.model_factory = model_factory or ModelFactory()
+        
+        # use model_factory is provided, else reuse the class's model_factory
+        if model_factory:
+            self.model_factory = model_factory
         self.mockups = {}
 
         for resource_name, resource in self.api._registry.items():
             model_class = resource._meta.object_class
+            
+            if not model_class:
+                continue
+            
             self.register(resource)
             try:
-                model_factory[model_class]
+                self.model_factory[model_class]
             except:
                 self.model_factory.register(model_class)
 
     def get_key(self, resource):
         key = resource
-        if isinstance(resource, ModelResource):
+        if isinstance(resource, Resource):
             if hasattr(resource._meta, 'resource_name'):
                 key = resource._meta.resource_name
             else:
