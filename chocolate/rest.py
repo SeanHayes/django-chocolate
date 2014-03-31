@@ -1,5 +1,8 @@
+from django.contrib.auth.models import AnonymousUser
+
 from tastypie.resources import Resource
 from tastypie import fields
+
 from models import Mockup, ModelFactory
 
 import generators
@@ -43,8 +46,11 @@ class TastyMockup(object):
         If no format is provided, the data is returned as a python dict.
 
         """
-        model_uri, model = self.create(**kwargs)
+        model = None
+        if self.model_class:
+            model_uri, model = self.create(**kwargs)
         bundle = self.resource.build_bundle(obj=model, request=None)
+        bundle.request.user = AnonymousUser()
         bundle = self.resource.full_dehydrate(bundle)
 
         if not format:
@@ -116,18 +122,19 @@ class TastyFactory(object):
     def __init__(self, api, model_factory=None):
         self.api = api
         
-        # use model_factory is provided, else reuse the class's model_factory
+        # use model_factory if provided, else reuse the class's model_factory
         if model_factory:
             self.model_factory = model_factory
         self.mockups = {}
 
         for resource_name, resource in self.api._registry.items():
+            self.register(resource)
+            
             model_class = resource._meta.object_class
             
             if not model_class:
                 continue
             
-            self.register(resource)
             try:
                 self.model_factory[model_class]
             except:
